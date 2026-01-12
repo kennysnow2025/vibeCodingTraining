@@ -28,6 +28,15 @@
       box-shadow:0 6px 30px rgba(0,0,0,0.6);
     }
     .btn{margin-top:10px;padding:8px 12px;border-radius:6px;background:#0ea5a1;color:#032;cursor:pointer;border:none}
+    .ranking{background:rgba(0,0,0,0.55);color:#ffffff;padding:10px;border-radius:10px;margin-top:10px;width:260px;text-align:left;box-shadow:0 6px 20px rgba(0,0,0,0.5)}
+    .ranking h3{margin:0 0 8px 0;font-size:14px}
+    .ranking ul{list-style:none;padding:0;margin:0;max-height:120px;overflow-y:auto}
+    .ranking ul::-webkit-scrollbar{width:6px}
+    .ranking ul::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.45);border-radius:6px}
+    .ranking ul{scrollbar-width:thin;scrollbar-color:rgba(0,0,0,0.45) transparent}
+    .ranking li{font-size:12px;line-height:14px;padding:4px 6px;border-radius:6px;background:rgba(255,255,255,0.025);margin-bottom:4px;color:#ffffff;display:flex;justify-content:space-between;align-items:center}
+    .ranking .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px}
+    .ranking .score-val{flex:0 0 auto;margin-left:6px}
   </style>
 </head>
 <body>
@@ -41,12 +50,17 @@
       <canvas id="game" width="600" height="400"></canvas>
       <div id="overlay" class="overlay" style="display:none;">
         <div id="msg">游戏结束</div>
+        <div style="margin-top:6px;color:#e6eef8;">本次得分: <span id="finalScore">0</span></div>
         <input id="username" type="text" placeholder="输入你的名字" style="margin-top:8px;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);width:220px;color:inherit;background:transparent;">
         <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
           <button id="uploadBtn" class="btn">上传分数</button>
           <button id="restart" class="btn">重新开始 (Enter)</button>
         </div>
         <div id="uploadStatus" class="hint" style="margin-top:8px"></div>
+        <div class="ranking" aria-label="排行榜">
+          <h3>🏆 排行榜</h3>
+          <ul id="rankingList"></ul>
+        </div>
       </div>
     </div>
   </div>
@@ -92,6 +106,7 @@
     const usernameInput = document.getElementById('username');
     const uploadBtn = document.getElementById('uploadBtn');
     const uploadStatus = document.getElementById('uploadStatus');
+    const rankingListEl = document.getElementById('rankingList');
 
     const scale = 20; // 每格像素大小
     const cols = Math.floor(canvas.width / scale);
@@ -221,6 +236,8 @@
       if(uploadStatus) uploadStatus.textContent = '';
       if(uploadBtn){ uploadBtn.style.display = 'inline-block'; uploadBtn.disabled = false; }
       overlay.style.display = 'block';
+      // 刷新排行榜
+      fetchLeaderboard();
     }
 
     // 键盘控制
@@ -265,8 +282,49 @@
       });
     }
 
+    // 获取排行榜并渲染到 #rankingList
+    async function fetchLeaderboard(){
+      if(!rankingListEl) return;
+      try{
+        const { data, error } = await _supabase
+          .from('leaderboard')
+          .select('*')
+          .order('score', { ascending: false })
+          .limit(5);
+        if(error){
+          console.error('拉取排行榜失败', error);
+          return;
+        }
+        rankingListEl.innerHTML = '';
+        if(!data || data.length === 0){
+          const li = document.createElement('li');
+          li.textContent = '暂无记录';
+          rankingListEl.appendChild(li);
+          return;
+        }
+        data.forEach((row, idx) => {
+          const li = document.createElement('li');
+          const name = row.username || '匿名';
+          const scoreVal = row.score ?? 0;
+          const left = document.createElement('div');
+          left.className = 'name';
+          left.textContent = `第${idx+1}名: ${name}`;
+          const right = document.createElement('div');
+          right.className = 'score-val';
+          right.textContent = scoreVal;
+          li.appendChild(left);
+          li.appendChild(right);
+          rankingListEl.appendChild(li);
+        });
+      }catch(err){
+        console.error('fetchLeaderboard error', err);
+      }
+    }
+
     // 初始启动
     init();
+    // 页面加载时获取并渲染排行榜
+    fetchLeaderboard();
   </script>
 </body>
 </html>
