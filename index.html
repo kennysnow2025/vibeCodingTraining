@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
+    <!-- 在你的 index.html 里加入这行 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>贪吃蛇</title>
@@ -38,12 +41,47 @@
       <canvas id="game" width="600" height="400"></canvas>
       <div id="overlay" class="overlay" style="display:none;">
         <div id="msg">游戏结束</div>
-        <button id="restart" class="btn">重新开始 (Enter)</button>
+        <input id="username" type="text" placeholder="输入你的名字" style="margin-top:8px;padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);width:220px;color:inherit;background:transparent;">
+        <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
+          <button id="uploadBtn" class="btn">上传分数</button>
+          <button id="restart" class="btn">重新开始 (Enter)</button>
+        </div>
+        <div id="uploadStatus" class="hint" style="margin-top:8px"></div>
       </div>
     </div>
   </div>
 
   <script>
+    // --- Supabase 连接配置开始 ---
+    // 1. 初始化客户端
+    const { createClient } = supabase;
+
+    // ⚠️ 把下面两行引号里的内容，换成你刚才复制的 URL 和 Key
+    const supabaseUrl = 'https://smloarjbpsztnpxunrcu.supabase.co';
+    const supabaseKey = 'sb_publishable_F9O_O-uHImahLNAu5XZeFQ_K-WeHZv1';
+
+    const _supabase = createClient(supabaseUrl, supabaseKey);
+
+    // 2. 定义一个上传分数的函数（给游戏结束时调用）
+    async function uploadScore(username, score) {
+      const payload = { score: score, created_at: new Date() };
+      if (username) payload.username = username;
+      const { data, error } = await _supabase
+        .from('leaderboard')
+        .insert([payload]);
+
+      if (error) {
+        console.error('上传失败:', error);
+        return { error };
+      } else {
+        console.log('分数上传成功！');
+        return { data };
+      }
+    }
+    // --- Supabase 连接配置结束 ---
+
+    // 下面是你原来的游戏代码...
+
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('score');
@@ -51,6 +89,9 @@
     const overlay = document.getElementById('overlay');
     const msg = document.getElementById('msg');
     const restartBtn = document.getElementById('restart');
+    const usernameInput = document.getElementById('username');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const uploadStatus = document.getElementById('uploadStatus');
 
     const scale = 20; // 每格像素大小
     const cols = Math.floor(canvas.width / scale);
@@ -63,7 +104,7 @@
     let score = 0;
     let highScore = 0;
     let timer = null;
-    const speed = 160; // 毫秒（减慢移动速度，便于控制）
+    const speed = 640; // 毫秒（再慢一半，移动速度为之前的一半）
 
     function init(){
       snake = [];
@@ -175,6 +216,10 @@
       running = false;
       clearInterval(timer);
       msg.textContent = `游戏结束，得分 ${score}。最高分 ${highScore}`;
+      // 显示上传 UI，等待用户输入名字并手动上传
+      if(usernameInput) usernameInput.value = '';
+      if(uploadStatus) uploadStatus.textContent = '';
+      if(uploadBtn){ uploadBtn.style.display = 'inline-block'; uploadBtn.disabled = false; }
       overlay.style.display = 'block';
     }
 
@@ -192,6 +237,33 @@
     });
 
     restartBtn.addEventListener('click', ()=> init());
+
+    // 上传分数按钮逻辑：验证名字并通过 Supabase 上传
+    if(uploadBtn){
+      uploadBtn.addEventListener('click', async () => {
+        const name = usernameInput ? usernameInput.value.trim() : '';
+        if(!name){
+          if(uploadStatus) uploadStatus.textContent = '请输入名字后再上传。';
+          return;
+        }
+        uploadBtn.disabled = true;
+        if(uploadStatus) uploadStatus.textContent = '上传中...';
+        try{
+          const res = await uploadScore(name, score);
+          if(res && res.error){
+            if(uploadStatus) uploadStatus.textContent = '上传失败，请重试。';
+            uploadBtn.disabled = false;
+          } else {
+            if(uploadStatus) uploadStatus.textContent = '上传成功';
+            uploadBtn.style.display = 'none';
+          }
+        }catch(err){
+          console.error(err);
+          if(uploadStatus) uploadStatus.textContent = '上传出错';
+          uploadBtn.disabled = false;
+        }
+      });
+    }
 
     // 初始启动
     init();
